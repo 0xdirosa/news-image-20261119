@@ -10,6 +10,15 @@ strokes stay crisp when the judge views it small; 35 stories instead of 21
 (lead + 6 large + 8 small + a 20-row WORLD BRIEFS grid); the lead gets a
 Shenzhen skyline hero beside the three flags; subs are shortened to one line
 each so nothing crowds or overflows.
+
+v4 vs v3 (cover redesign): navy masthead band with cream title + gold date;
+the lead hero becomes a full-width sunset panorama (indigo -> amber gradient,
+low sun, three skyline depths with lit windows, water with sun reflections);
+panels get soft per-section tints + coloured kicker chips; icons sit on soft
+tint discs and key shapes are filled (flame, ship hull, globe ocean); the
+briefs grid sits on a tinted band. Facts unchanged (35 stories; the COP31
+brief already reads 2035 in v3 — the earlier "2036" was a misread of the
+stroke-font 5 at small size).
 """
 
 import math
@@ -29,6 +38,28 @@ GREEN = (31, 122, 74)
 GREY = (90, 96, 104)
 LIGHT_LINE = (205, 198, 182)
 SKY = (178, 214, 235)
+# v4 palette: sunset hero + section tints
+CREAM = (250, 246, 236)
+SUNSET_TOP = (24, 26, 68)
+SUNSET_MID = (86, 60, 122)
+SUNSET_LOW = (196, 96, 82)
+SUNSET_HORIZON = (244, 166, 96)
+SUN = (255, 216, 132)
+TOWER_BACK = (122, 112, 158)
+TOWER_MID = (52, 48, 92)
+TOWER_FRONT = (14, 20, 38)
+WATER = (16, 36, 66)
+WATER_LINE = (64, 96, 148)
+DISC = (235, 238, 243)
+BRIEFS_BG = (238, 241, 246)
+BRIEFS_SEP = (210, 215, 222)
+MASTHEAD_SIDE = (150, 165, 190)
+CHIP_ORANGE = (200, 90, 30)
+CHIP_STEEL = (90, 110, 140)
+CHIP_TEAL = (20, 140, 130)
+CHIP_AMBER = (201, 140, 30)
+CHIP_VIOLET = (110, 80, 160)
+CHIP_DARKRED = (140, 30, 40)
 
 # ---------------------------------------------------------------- stroke font
 # Each glyph: list of strokes; each stroke is a polyline of (x, y) points on a
@@ -121,6 +152,23 @@ class Canvas:
         for yy in range(y, y + h):
             for xx in range(x, x + w):
                 self.set(xx, yy, c)
+
+    def rowfill(self, x, y, w, c):
+        # one supersampled row, C-speed slice assignment
+        if y < 0 or y >= self.ph or x >= self.pw or w <= 0:
+            return
+        x = max(0, x)
+        w = min(w, self.pw - x)
+        if w <= 0:
+            return
+        i = (y * self.pw + x) * 3
+        self.px[i:i + w * 3] = bytes(c) * w
+
+    def fast_rect(self, x, y, w, h, c):
+        # large rect via rowfill (logical coords)
+        s = self.ss
+        for dy in range(h * s):
+            self.rowfill(x * s, y * s + dy, w * s, c)
 
     def rect(self, x, y, w, h, c):
         s = self.ss
@@ -367,6 +415,7 @@ def icon_chart(cv, x, y, u):
 def icon_globe(cv, x, y, u):
     t = max(2, int(2 * u))
     cx, cy, r = int(x + 28 * u), int(y + 22 * u), int(16 * u)
+    cv.disc(cx, cy, r, (200, 222, 240))
     cv.ring(cx, cy, r, NAVY_SOFT, t)
     cv.ellipse(cx, cy, int(7 * u), r, NAVY_SOFT, max(1, t - 1))
     cv.line(cx - r, cy, cx + r, cy, NAVY_SOFT, max(1, t - 1))
@@ -391,6 +440,11 @@ def icon_cyclone(cv, x, y, u):
 def icon_flame(cv, x, y, u):
     t = max(2, int(2 * u))
     cx = int(x + 30 * u)
+    # filled flame body (solid red + gold core under the outline)
+    cv.triangle(cx, int(y + 2 * u), int(x + 16 * u), int(y + 30 * u),
+                int(x + 44 * u), int(y + 30 * u), RED)
+    cv.triangle(cx, int(y + 12 * u), int(x + 23 * u), int(y + 30 * u),
+                int(x + 37 * u), int(y + 30 * u), GOLD)
     # outer flame: two arcs meeting at the tip
     cv.arc(cx, int(y + 24 * u), int(14 * u), RED, 200, 340, t)
     cv.line(int(x + 16 * u), int(y + 24 * u), cx, int(y + 2 * u), RED, t)
@@ -465,6 +519,11 @@ def icon_capitol(cv, x, y, u):
 
 def icon_ship(cv, x, y, u):
     t = max(2, int(2 * u))
+    # filled hull (two triangles), bow down
+    cv.triangle(int(x + 6 * u), int(y + 22 * u), int(x + 54 * u), int(y + 30 * u),
+                int(x + 10 * u), int(y + 30 * u), NAVY)
+    cv.triangle(int(x + 54 * u), int(y + 30 * u), int(x + 50 * u), int(y + 36 * u),
+                int(x + 10 * u), int(y + 30 * u), NAVY)
     # hull tilted, bow down
     cv.line(int(x + 6 * u), int(y + 22 * u), int(x + 54 * u), int(y + 30 * u), NAVY, t)
     cv.line(int(x + 6 * u), int(y + 22 * u), int(x + 10 * u), int(y + 30 * u), NAVY, t)
@@ -491,125 +550,193 @@ def icon_voyager(cv, x, y, u):
     cv.triangle(cx, int(y + 8 * u), int(x + 18 * u), int(y + 28 * u), int(x + 42 * u), int(y + 28 * u), GOLD)
     cv.disc(cx, int(y + 22 * u), max(2, int(4 * u)), NAVY)
 
-# ---------------------------------------------------------------- skyline hero
-def draw_skyline(cv, x, y, w, h):
-    """Shenzhen skyline silhouette on a sky band: navy towers, gold windows,
-    one tall spire (Ping An Finance Centre). All rects, bold enough to read
-    as a skyline even at 300px."""
-    cv.rect(x, y, w, h, SKY)
-    # (dx, bw, bh) as fractions of w/h; towers sit on the band's bottom
-    towers = [(0.00, 0.15, 0.55), (0.13, 0.11, 0.78), (0.22, 0.17, 0.45),
-              (0.37, 0.10, 0.92), (0.45, 0.13, 0.60), (0.56, 0.11, 0.80),
-              (0.65, 0.15, 0.50), (0.78, 0.10, 0.70), (0.86, 0.14, 0.58)]
-    for dx, bw, bh in towers:
+# ---------------------------------------------------------------- sunset hero
+def vgrad(cv, x, y, w, h, stops):
+    """Vertical gradient over a logical rect; stops = [(frac, color), ...]."""
+    s = cv.ss
+    for r in range(h):
+        t = r / (h - 1) if h > 1 else 0.0
+        t0, c0 = stops[0]
+        t1, c1 = stops[-1]
+        for i in range(len(stops) - 1):
+            if stops[i][0] <= t <= stops[i + 1][0]:
+                t0, c0 = stops[i]
+                t1, c1 = stops[i + 1]
+                break
+        f = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+        col = tuple(int(round(c0[k] + (c1[k] - c0[k]) * f)) for k in range(3))
+        for dy in range(s):
+            cv.rowfill(x * s, (y + r) * s + dy, w * s, col)
+
+
+def _tower_row(cv, x, y, w, sky_h, towers, color, windows=False, idx0=0):
+    """One skyline layer: towers sit on the horizon (y + sky_h)."""
+    for idx, (dx, bw, bh) in enumerate(towers):
         bx = x + int(dx * w)
         bwpx = max(4, int(bw * w))
-        bhpx = int(bh * h)
-        cv.rect(bx, y + h - bhpx, bwpx, bhpx, NAVY)
-    # spire on the tallest tower
-    tx = x + int(0.42 * w)
-    cv.line(tx, y + h - int(0.92 * h), tx, y + 2, NAVY, 3)
-    cv.disc(tx, y + 2, 2, GOLD)
-    # gold windows, fixed pattern
-    for wx, wy in ((0.03, 0.62), (0.07, 0.72), (0.16, 0.55), (0.19, 0.68),
-                   (0.27, 0.70), (0.40, 0.50), (0.48, 0.66), (0.52, 0.74),
-                   (0.59, 0.58), (0.68, 0.70), (0.72, 0.78), (0.81, 0.60),
-                   (0.89, 0.70), (0.93, 0.78)):
-        cv.rect(x + int(wx * w), y + int(wy * h), 3, 3, GOLD)
+        bhpx = int(bh * sky_h)
+        cv.rect(bx, y + sky_h - bhpx, bwpx, bhpx, color)
+        if windows:
+            for col in range(bwpx // 10):
+                for row in range(bhpx // 9):
+                    if (col + 2 * row + idx + idx0) % 4 == 0:
+                        cv.rect(bx + 3 + col * 10, y + sky_h - bhpx + 3 + row * 9,
+                                2, 2, GOLD)
+
+
+def draw_hero(cv, x, y, w, h):
+    """Full-width sunset panorama: indigo -> amber sky, low sun in a gap
+    between towers, three skyline depths with lit windows, water with sun
+    reflections. All positions fixed (deterministic)."""
+    sky_h = int(h * 0.70)
+    vgrad(cv, x, y, w, sky_h,
+          [(0.0, (30, 30, 78)), (0.35, (104, 70, 132)),
+           (0.62, (214, 110, 88)), (0.85, (248, 176, 104)),
+           (1.0, (252, 200, 130))])
+    back = [(0.00, 0.09, 0.40), (0.14, 0.08, 0.60), (0.27, 0.10, 0.35),
+            (0.42, 0.08, 0.55), (0.55, 0.10, 0.38), (0.70, 0.08, 0.58),
+            (0.83, 0.09, 0.42), (0.94, 0.06, 0.50)]
+    _tower_row(cv, x, y, w, sky_h, back, TOWER_BACK)
+    mid = [(0.06, 0.08, 0.70), (0.20, 0.09, 0.52), (0.34, 0.08, 0.78),
+           (0.47, 0.07, 0.60), (0.60, 0.08, 0.72), (0.76, 0.09, 0.55),
+           (0.90, 0.07, 0.65)]
+    _tower_row(cv, x, y, w, sky_h, mid, TOWER_MID, windows=True, idx0=5)
+    # spire on the tallest mid tower (Ping An)
+    tx = x + int(0.38 * w)
+    top = y + sky_h - int(0.78 * sky_h)
+    cv.line(tx, top, tx, top - 10, TOWER_MID, 3)
+    cv.disc(tx, top - 10, 2, GOLD)
+    # low sun with halo, in the gap between the mid towers at 0.60-0.68
+    # and 0.76+, and between the front towers at 0.62-0.70 and 0.78+
+    sunx = x + int(w * 0.72)
+    suny = y + int(sky_h * 0.45)
+    cv.disc(sunx, suny, 20, (240, 170, 100))
+    cv.disc(sunx, suny, 14, SUN)
+    front = [(0.03, 0.10, 0.55), (0.18, 0.08, 0.68), (0.31, 0.11, 0.42),
+             (0.47, 0.09, 0.60), (0.62, 0.08, 0.48), (0.78, 0.10, 0.58),
+             (0.93, 0.07, 0.50)]
+    _tower_row(cv, x, y, w, sky_h, front, TOWER_FRONT, windows=True)
+    # water + sun reflection
+    cv.fast_rect(x, y + sky_h, w, h - sky_h, WATER)
+    for dy, ww in ((4, 74), (9, 96), (14, 62), (19, 104), (24, 58), (28, 82)):
+        cv.rect(sunx - ww // 2, y + sky_h + dy, ww, 2, (240, 180, 90))
+    for dy in (2, 12, 22, 29):
+        cv.hline(x + 20, y + sky_h + dy, w - 40, WATER_LINE, 1)
+    for fx, fy in ((0.08, 4), (0.20, 9), (0.35, 6), (0.50, 12), (0.63, 5),
+                   (0.78, 10), (0.90, 7)):
+        cv.rect(x + int(fx * w), y + sky_h + fy, 4, 2, (220, 170, 80))
 
 
 # ---------------------------------------------------------------- layout
 def build():
     cv = Canvas(W, H, PAPER)
 
-    # ---- masthead
-    cv.rect(28, 16, 968, 6, RED)
-    draw_text_centered(cv, 512, 30, "THE WORLD IN ONE DAY", 6, NAVY, bold=True)
-    draw_text_centered(cv, 512, 84, "THURSDAY 19 NOVEMBER 2026", 3, RED, bold=True)
-    cv.rect(28, 120, 968, 3, NAVY)
+    # ---- masthead: navy band, cream title, gold date
+    cv.rect(28, 10, 968, 6, RED)
+    cv.fast_rect(28, 18, 968, 85, NAVY)
+    draw_text_centered(cv, 512, 28, "THE WORLD IN ONE DAY", 6, CREAM, bold=True)
+    draw_text(cv, 44, 86, "VOL. 1 - NO. 1", 1.5, MASTHEAD_SIDE, bold=True)
+    draw_text(cv, 996 - text_width("ONE DAY, ONE PAGE", 1.5), 86,
+              "ONE DAY, ONE PAGE", 1.5, MASTHEAD_SIDE, bold=True)
+    draw_text_centered(cv, 512, 76, "THURSDAY 19 NOVEMBER 2026", 2.5, GOLD, bold=True)
+    cv.rect(28, 103, 968, 3, GOLD)
 
-    # ---- lead panel (skyline hero + three flags on the right)
-    lx, ly, lw, lh = 28, 134, 968, 210
+    # ---- lead panel: sunset hero band + headline + flags + sub
+    lx, ly, lw, lh = 28, 114, 968, 288
     cv.rect(lx, ly, lw, lh, WHITE)
     cv.outline(lx, ly, lw, lh, NAVY, 3)
     cv.rect(lx, ly, 10, lh, RED)
-    draw_text(cv, lx + 26, ly + 16, "LEAD STORY", 2, RED, bold=True)
-    draw_text(cv, lx + 26, ly + 44, "TRUMP, XI AND PUTIN", 5, NAVY, bold=True)
-    draw_text(cv, lx + 26, ly + 88, "MEET IN SHENZHEN", 5, NAVY, bold=True)
+    draw_hero(cv, lx + 3, ly + 3, lw - 6, 102)
+    draw_text(cv, lx + 26, ly + 112, "LEAD STORY", 2, RED, bold=True)
+    draw_text(cv, lx + 26, ly + 130, "TRUMP, XI AND PUTIN", 5, NAVY, bold=True)
+    draw_text(cv, lx + 26, ly + 174, "MEET IN SHENZHEN", 5, NAVY, bold=True)
+    fx = lx + 700
+    for i, (flag, label) in enumerate(((flag_us, "USA"), (flag_cn, "CHINA"),
+                                       (flag_ru, "RUSSIA"))):
+        fy = ly + 128 + i * 44
+        flag(cv, fx, fy, 170, 38)
+        cv.outline(fx, fy, 170, 38, NAVY, 1)
+        draw_text(cv, fx + 178, fy + 12, label, 2, NAVY, bold=True)
     sub = ("FIRST THREE-WAY SUMMIT OF THE NUCLEAR POWERS - JOINT CALL FOR "
            "NUCLEAR-RISK DIALOGUE AND STEADY ENERGY FLOWS, SILENT ON UKRAINE "
            "AND IRAN")
-    draw_block(cv, lx + 26, ly + 134, sub, 2, 640, NAVY_SOFT, leading=18)
-    draw_skyline(cv, 700, ly + 10, 296, 54)
-    fx = lx + 688
-    for i, (flag, label) in enumerate(((flag_us, "USA"), (flag_cn, "CHINA"),
-                                       (flag_ru, "RUSSIA"))):
-        fy = ly + 70 + i * 44
-        flag(cv, fx, fy, 170, 40)
-        cv.outline(fx, fy, 170, 40, NAVY, 1)
-        draw_text(cv, fx + 178, fy + 13, label, 2, NAVY, bold=True)
+    draw_block(cv, lx + 26, ly + 224, sub, 2, 620, NAVY_SOFT, leading=18)
 
-    # ---- tier 1: six large panels, 2 cols x 3 rows, one-line subs
+    # ---- tier 1: six large panels, 2 cols x 3 rows, tinted + kicker chips
     tier1 = [
         ("THE HAGUE", "ICJ: MYANMAR GUILTY OF ROHINGYA GENOCIDE",
-         "FIRST SUCH RULING; MYANMAR MUST PAY", icon_scales),
+         "FIRST SUCH RULING; MYANMAR MUST PAY", icon_scales,
+         (232, 238, 245), NAVY_SOFT),
         ("GULF", "US HITS QESHM, IRAN STRIKES BACK",
-         "TEHRAN HITS US BASES IN THE GULF", icon_tanker),
+         "TEHRAN HITS US BASES IN THE GULF", icon_tanker,
+         (247, 238, 220), CHIP_ORANGE),
         ("UKRAINE", "UKRAINE HITS CRIMEA BRIDGE AGAIN",
-         "THIRD STRIKE THIS WEEK; TRAINS HALTED", icon_bridge),
+         "THIRD STRIKE THIS WEEK; TRAINS HALTED", icon_bridge,
+         (236, 238, 242), CHIP_STEEL),
         ("MARKETS", "ANTHROPIC'S $81.3BN IPO, BIGGEST EVER",
-         "PRICED $83 A SHARE; TRADES TODAY", icon_chart),
+         "PRICED $83 A SHARE; TRADES TODAY", icon_chart,
+         (232, 242, 234), GREEN),
         ("CLIMATE", "COP31 TALKS ENTER FINAL STRETCH",
-         "PHASEOUT WORDING STILL UNSETTLED", icon_globe),
+         "PHASEOUT WORDING STILL UNSETTLED", icon_globe,
+         (228, 242, 240), CHIP_TEAL),
         ("INDIA", "CYCLONE AKVAN BEARS DOWN ON EAST COAST",
-         "LANDFALL FRIDAY; WINDS 90-100 KM/H", icon_cyclone),
+         "LANDFALL FRIDAY; WINDS 90-100 KM/H", icon_cyclone,
+         (250, 240, 222), CHIP_AMBER),
     ]
     gx = 28
-    pw, ph = 472, 84
-    for i, (kicker, head, sub, icon) in enumerate(tier1):
+    pw, ph = 472, 78
+    for i, (kicker, head, sub, icon, tint, chip) in enumerate(tier1):
         px = gx + (i % 2) * (pw + 24)
-        py = 356 + (i // 2) * (ph + 8)
-        cv.rect(px, py, pw, ph, WHITE)
+        py = 412 + (i // 2) * (ph + 8)
+        cv.rect(px, py, pw, ph, tint)
         cv.outline(px, py, pw, ph, NAVY, 2)
         cv.rect(px, py, pw, 4, RED)
-        draw_text(cv, px + 14, py + 8, kicker, 1, RED, bold=True)
-        icon(cv, px + pw - 92, py + 10, 1.35)
+        cv.rect(px + 14, py + 9, 10, 10, chip)
+        draw_text(cv, px + 30, py + 8, kicker, 1, RED, bold=True)
+        cv.disc(px + pw - 52, py + 39, 28, DISC)
+        icon(cv, px + pw - 92, py + 10, 1.2)
         draw_block(cv, px + 14, py + 24, head, 2.5, pw - 28 - 96, NAVY,
                    leading=21, bold=True)
-        draw_text(cv, px + 14, py + 68, sub, 1.5, NAVY_SOFT)
+        draw_text(cv, px + 14, py + 64, sub, 1.5, NAVY_SOFT)
 
-    # ---- tier 2: eight small panels, 2 cols x 4 rows
+    # ---- tier 2: eight small panels, 2 cols x 4 rows, alternating tints
     tier2 = [
         ("BANGLADESH", "UNREST: 4 DEAD, YUNUS HOME BURNT",
-         "ANCESTRAL HOME SET ABLAZE", icon_flame),
+         "ANCESTRAL HOME SET ABLAZE", icon_flame, WHITE, CHIP_ORANGE),
         ("SAUDI ARABIA", "HOUTHI MISSILE DAMAGES PIF TOWER",
-         "STRIKE HITS RIYADH LANDMARK", icon_tower),
+         "STRIKE HITS RIYADH LANDMARK", icon_tower,
+         (248, 244, 236), CHIP_AMBER),
         ("GAZA", "ISRAEL PUSHES INTO CENTRAL GAZA",
-         "GROUND OP DESPITE CEASEFIRE", icon_tank),
+         "GROUND OP DESPITE CEASEFIRE", icon_tank, WHITE, CHIP_DARKRED),
         ("NORTH KOREA", "IAEA: YONGBYON ENRICHMENT GROWS",
-         "URANIUM FACILITY EXPANDS", icon_atom),
+         "URANIUM FACILITY EXPANDS", icon_atom,
+         (248, 244, 236), CHIP_VIOLET),
         ("GREENLAND", "DENMARK BACKS US DEAL 109-0",
-         "PARLIAMENT APPROVES PACT", icon_flag_dk),
+         "PARLIAMENT APPROVES PACT", icon_flag_dk, WHITE, RED),
         ("WASHINGTON", "JEFFRIES NOMINATED HOUSE SPEAKER",
-         "FULL HOUSE VOTE 3 JANUARY", icon_capitol),
+         "FULL HOUSE VOTE 3 JANUARY", icon_capitol,
+         (248, 244, 236), NAVY_SOFT),
         ("BLACK SEA", "LPG TANKER GAS HUSKY SINKS",
-         "HIT BY PROJECTILE OFF BULGARIA", icon_ship),
+         "HIT BY PROJECTILE OFF BULGARIA", icon_ship, WHITE, CHIP_STEEL),
         ("SPACE", "VOYAGER 1 NEARS ONE LIGHT-DAY",
-         "16BN MILES OUT, STILL GOING", icon_voyager),
+         "16BN MILES OUT, STILL GOING", icon_voyager,
+         (248, 244, 236), CHIP_VIOLET),
     ]
-    pw2, ph2 = 472, 48
-    for i, (kicker, head, sub, icon) in enumerate(tier2):
+    pw2, ph2 = 472, 44
+    for i, (kicker, head, sub, icon, tint, chip) in enumerate(tier2):
         px = gx + (i % 2) * (pw2 + 24)
-        py = 632 + (i // 2) * (ph2 + 8)
-        cv.rect(px, py, pw2, ph2, WHITE)
+        py = 670 + (i // 2) * (ph2 + 6)
+        cv.rect(px, py, pw2, ph2, tint)
         cv.outline(px, py, pw2, ph2, NAVY, 2)
         cv.rect(px, py, pw2, 3, RED)
-        draw_text(cv, px + 12, py + 5, kicker, 1, RED, bold=True)
+        cv.rect(px + 12, py + 6, 8, 8, chip)
+        draw_text(cv, px + 26, py + 5, kicker, 1, RED, bold=True)
+        cv.disc(px + pw2 - 34, py + 22, 17, DISC)
         icon(cv, px + pw2 - 60, py + 6, 0.8)
-        hh = draw_block(cv, px + 12, py + 18, head, 2, pw2 - 24 - 64, NAVY,
+        hh = draw_block(cv, px + 12, py + 17, head, 2, pw2 - 24 - 64, NAVY,
                         leading=16, bold=True)
         if hh <= 16:
-            draw_text(cv, px + 12, py + 34, sub, 1.5, NAVY_SOFT)
+            draw_text(cv, px + 12, py + 33, sub, 1.5, NAVY_SOFT)
 
     # ---- world briefs: 20 one-line stories, 2 cols x 10 rows
     briefs = [
@@ -634,17 +761,20 @@ def build():
         ("GULF", "LEADERS VOW TO KEEP HORMUZ OIL FLOWING"),
         ("TRADE", "TRUMP PRESSES XI ON FARM BUYING"),
     ]
-    draw_text(cv, 28, 856, "WORLD BRIEFS", 2, RED, bold=True)
+    # ---- world briefs on a tinted band: 20 one-line stories, 2 cols x 10
+    cv.fast_rect(28, 872, 968, 140, BRIEFS_BG)
+    cv.rect(28, 872, 968, 2, RED)
+    draw_text(cv, 28, 880, "WORLD BRIEFS", 2, RED, bold=True)
     bx = 28 + text_width("WORLD BRIEFS", 2) + 16
-    draw_text(cv, bx, 858, "20 MORE STORIES", 1.5, NAVY_SOFT, bold=True)
-    cv.rect(28, 874, 968, 2, RED)
+    draw_text(cv, bx, 882, "20 MORE STORIES", 1.5, NAVY_SOFT, bold=True)
+    cv.hline(28, 896, 968, (200, 206, 214), 1)
     for i, (kicker, head) in enumerate(briefs):
         px = gx + (i % 2) * (pw2 + 24)
-        py = 880 + (i // 2) * 13
+        py = 900 + (i // 2) * 11
         draw_text(cv, px + 10, py + 1, kicker, 1, RED, bold=True)
         draw_text(cv, px + 106, py + 1, head, 1.5, NAVY, bold=True)
-        cv.hline(px, py + 12, pw2, LIGHT_LINE, 1)
-    cv.rect(28, 1014, 968, 2, NAVY)
+        cv.hline(px, py + 10, pw2, BRIEFS_SEP, 1)
+    cv.rect(28, 1012, 968, 2, NAVY)
     return cv
 
 
