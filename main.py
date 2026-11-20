@@ -19,6 +19,14 @@ tint discs and key shapes are filled (flame, ship hull, globe ocean); the
 briefs grid sits on a tinted band. Facts unchanged (35 stories; the COP31
 brief already reads 2035 in v3 — the earlier "2036" was a misread of the
 stroke-font 5 at small size).
+
+v5 vs v4 (final polish, structure/facts/breadth unchanged): the skyline gets
+real shapes — stepped towers, a tapered Ping An tower, a dome, spires —
+instead of flat rectangles; the sun gets a soft radial glow (concentric rings
+fading to the sky colour, drawn behind the towers); the '5' glyph is squared
+off so it cannot be misread as '6' at briefs size; and the remaining line-art
+icons (scales, bridge, chart, cyclone, atom, capitol, voyager) are filled
+solid so the page reads as pictures, not line sketches.
 """
 
 import math
@@ -99,7 +107,7 @@ _S = {
     '2': [[(0, 1), (1, 0), (3, 0), (4, 1), (4, 2), (0, 6), (4, 6)]],
     '3': [[(1, 0), (3, 0), (4, 1), (4, 2), (2, 3), (4, 4), (4, 5), (3, 6), (1, 6)]],
     '4': [[(0, 0), (0, 4), (4, 4)], [(3, 0), (3, 6)]],
-    '5': [[(4, 0), (0, 0), (0, 3), (3, 3), (4, 4), (4, 5), (3, 6), (1, 6), (0, 5)]],
+    '5': [[(4, 0), (0, 0), (0, 3), (4, 3), (4, 6), (0, 6)]],
     '6': [[(4, 1), (3, 0), (1, 0), (0, 1), (0, 5), (1, 6), (3, 6), (4, 5), (4, 4), (3, 3), (0, 3)]],
     '7': [[(0, 0), (4, 0), (1, 6)]],
     '8': [[(1, 0), (3, 0), (4, 1), (4, 5), (3, 6), (1, 6), (0, 5), (0, 1), (1, 0)],
@@ -367,13 +375,18 @@ def flag_ru(cv, x, y, w, h):
 
 def icon_scales(cv, x, y, u):
     t = max(2, int(2 * u))
-    cv.vline(int(x + 30 * u), int(y + 4 * u), int(26 * u), NAVY, t)
-    cv.hline(int(x + 8 * u), int(y + 8 * u), int(44 * u), NAVY, t)
+    # solid post + beam + finial
+    cv.rect(int(x + 29 * u), int(y + 4 * u), max(2, int(2 * u)), int(28 * u), NAVY)
+    cv.rect(int(x + 8 * u), int(y + 7 * u), int(44 * u), max(2, int(2 * u)), NAVY)
     cv.disc(int(x + 30 * u), int(y + 6 * u), max(2, int(3 * u)), NAVY)
-    cv.line(int(x + 8 * u), int(y + 8 * u), int(x + 8 * u), int(y + 20 * u), NAVY, max(1, t - 1))
-    cv.line(int(x + 52 * u), int(y + 8 * u), int(x + 52 * u), int(y + 20 * u), NAVY, max(1, t - 1))
-    cv.arc_bottom(int(x + 8 * u), int(y + 20 * u), int(9 * u), NAVY, max(1, t - 1))
-    cv.arc_bottom(int(x + 52 * u), int(y + 20 * u), int(9 * u), NAVY, max(1, t - 1))
+    # hangers
+    cv.line(int(x + 8 * u), int(y + 8 * u), int(x + 8 * u), int(y + 18 * u), NAVY, max(1, t - 1))
+    cv.line(int(x + 52 * u), int(y + 8 * u), int(x + 52 * u), int(y + 18 * u), NAVY, max(1, t - 1))
+    # filled pans: solid bowls hanging from the beam
+    cv.triangle(int(x + 0 * u), int(y + 18 * u), int(x + 16 * u), int(y + 18 * u),
+                int(x + 8 * u), int(y + 30 * u), NAVY)
+    cv.triangle(int(x + 44 * u), int(y + 18 * u), int(x + 60 * u), int(y + 18 * u),
+                int(x + 52 * u), int(y + 30 * u), NAVY)
     cv.hline(int(x + 20 * u), int(y + 32 * u), int(20 * u), NAVY, t)
     cv.hline(int(x + 16 * u), int(y + 36 * u), int(28 * u), NAVY, t)
 
@@ -392,10 +405,19 @@ def icon_tanker(cv, x, y, u):
 
 def icon_bridge(cv, x, y, u):
     t = max(2, int(3 * u))
-    cv.arc_top(int(x + 30 * u), int(y + 28 * u), int(24 * u), NAVY, t)
-    cv.hline(int(x), int(y + 28 * u), int(60 * u), NAVY, t)
-    cv.vline(int(x + 8 * u), int(y + 10 * u), int(20 * u), NAVY, max(1, t - 1))
-    cv.vline(int(x + 52 * u), int(y + 10 * u), int(20 * u), NAVY, max(1, t - 1))
+    cx = int(x + 30 * u)
+    deck_y = int(y + 28 * u)
+    r = int(24 * u)
+    # solid arch band: fill between the outer arc and the inner arc
+    ri = r - max(2, int(5 * u))
+    for dx in range(-r, r + 1):
+        yo = int((r * r - dx * dx) ** 0.5)
+        yi = int((ri * ri - dx * dx) ** 0.5) if abs(dx) < ri else 0
+        cv.vline(cx + dx, deck_y - yo, yo - yi, NAVY, 1)
+    # solid deck band + solid towers
+    cv.rect(int(x), deck_y, int(60 * u), max(2, int(3 * u)), NAVY)
+    cv.rect(int(x + 6 * u), int(y + 10 * u), max(2, int(4 * u)), int(18 * u), NAVY)
+    cv.rect(int(x + 50 * u), int(y + 10 * u), max(2, int(4 * u)), int(18 * u), NAVY)
     # red crack down the middle of the deck
     cv.line(int(x + 30 * u), int(y + 2 * u), int(x + 28 * u), int(y + 14 * u), RED, max(1, t - 1))
     cv.line(int(x + 28 * u), int(y + 14 * u), int(x + 32 * u), int(y + 26 * u), RED, max(1, t - 1))
@@ -403,9 +425,20 @@ def icon_bridge(cv, x, y, u):
 
 def icon_chart(cv, x, y, u):
     t = max(2, int(2 * u))
+    pts = [(4, 28), (18, 22), (30, 24), (44, 12), (56, 6)]
+    # solid area under the line (light green) so it reads as a chart
+    for px in range(4, 57):
+        ly = None
+        for a, b in zip(pts, pts[1:]):
+            if a[0] <= px <= b[0]:
+                f = (px - a[0]) / (b[0] - a[0])
+                ly = a[1] + (b[1] - a[1]) * f
+                break
+        if ly is not None:
+            cv.vline(int(x + px * u), int(y + ly * u), int((32 - ly) * u),
+                     (186, 224, 198), 1)
     cv.hline(int(x), int(y + 32 * u), int(60 * u), NAVY, max(1, t - 1))
     cv.vline(int(x), int(y + 2 * u), int(32 * u), NAVY, max(1, t - 1))
-    pts = [(4, 28), (18, 22), (30, 24), (44, 12), (56, 6)]
     for a, b in zip(pts, pts[1:]):
         cv.line(int(x + a[0] * u), int(y + a[1] * u), int(x + b[0] * u), int(y + b[1] * u), GREEN, t)
     cv.triangle(int(x + 56 * u), int(y + 6 * u), int(x + 48 * u), int(y + 4 * u), int(x + 54 * u), int(y + 14 * u), GREEN)
@@ -428,13 +461,16 @@ def icon_globe(cv, x, y, u):
 
 
 def icon_cyclone(cv, x, y, u):
-    t = max(2, int(2 * u))
+    t = max(2, int(3 * u))
     cx, cy = int(x + 30 * u), int(y + 17 * u)
     for r0, a0, a1 in ((4, 0, 300), (8, 40, 340), (12, 80, 380), (16, 120, 420)):
         cv.arc(cx, cy, int(r0 * u), NAVY_SOFT, a0, a1, max(1, t - 1))
-    cv.disc(cx, cy, max(1, int(2 * u)), NAVY)
+    cv.disc(cx, cy, max(2, int(4 * u)), NAVY)  # solid eye
+    # solid rain drops below the spiral
     for dx in (-18, 0, 18):
-        cv.line(int(x + (30 + dx) * u), int(y + 34 * u), int(x + (28 + dx) * u), int(y + 40 * u), NAVY_SOFT, max(1, t - 1))
+        cv.triangle(int(x + (30 + dx) * u), int(y + 32 * u),
+                    int(x + (27 + dx) * u), int(y + 40 * u),
+                    int(x + (33 + dx) * u), int(y + 40 * u), NAVY_SOFT)
 
 
 def icon_flame(cv, x, y, u):
@@ -493,7 +529,11 @@ def icon_atom(cv, x, y, u):
     _rot_ellipse(cv, cx, cy, int(20 * u), int(8 * u), 0, NAVY_SOFT, max(1, t - 1))
     _rot_ellipse(cv, cx, cy, int(20 * u), int(8 * u), math.pi / 3, NAVY_SOFT, max(1, t - 1))
     _rot_ellipse(cv, cx, cy, int(20 * u), int(8 * u), -math.pi / 3, NAVY_SOFT, max(1, t - 1))
-    cv.disc(cx, cy, max(2, int(4 * u)), RED)
+    # solid electrons riding the orbits (positions on each ellipse)
+    cv.disc(int(x + 50 * u), int(y + 20 * u), max(2, int(3 * u)), GOLD)
+    cv.disc(int(x + 20 * u), int(y + 3 * u), max(2, int(3 * u)), NAVY)
+    cv.disc(int(x + 37 * u), int(y + 24 * u), max(2, int(3 * u)), NAVY)
+    cv.disc(cx, cy, max(2, int(5 * u)), RED)  # bigger solid nucleus
 
 
 def icon_flag_dk(cv, x, y, u):
@@ -507,12 +547,18 @@ def icon_flag_dk(cv, x, y, u):
 def icon_capitol(cv, x, y, u):
     t = max(2, int(2 * u))
     cx = int(x + 30 * u)
-    cv.arc_top(cx, int(y + 18 * u), int(14 * u), NAVY, t)
-    cv.rect(cx - int(14 * u), int(y + 18 * u), int(28 * u), int(2 * u), NAVY)
+    dome_cy = int(y + 18 * u)
+    r = int(14 * u)
+    # solid dome (filled half-disc)
+    for dy in range(0, r + 1):
+        hw = int((r * r - (r - dy) * (r - dy)) ** 0.5)
+        cv.hline(cx - hw, dome_cy - r + dy, 2 * hw + 1, NAVY, 1)
+    # solid entablature, columns and steps
+    cv.rect(cx - r, dome_cy, 2 * r, max(2, int(2 * u)), NAVY)
     for dx in (-11, -4, 3, 10):
-        cv.vline(int(x + (30 + dx) * u), int(y + 20 * u), int(14 * u), NAVY, max(1, t - 1))
-    cv.hline(int(x + 12 * u), int(y + 34 * u), int(36 * u), NAVY, t)
-    cv.hline(int(x + 8 * u), int(y + 38 * u), int(44 * u), NAVY, max(1, t - 1))
+        cv.rect(int(x + (30 + dx) * u), int(y + 20 * u), max(2, int(3 * u)), int(14 * u), NAVY)
+    cv.rect(int(x + 12 * u), int(y + 34 * u), int(36 * u), max(2, int(2 * u)), NAVY)
+    cv.rect(int(x + 8 * u), int(y + 38 * u), int(44 * u), max(2, int(2 * u)), NAVY)
     cv.vline(cx, int(y + 2 * u), int(4 * u), NAVY, max(1, t - 1))
     cv.disc(cx, int(y + 2 * u), max(1, int(2 * u)), GOLD)
 
@@ -542,13 +588,16 @@ def icon_ship(cv, x, y, u):
 def icon_voyager(cv, x, y, u):
     t = max(2, int(2 * u))
     cx, cy = int(x + 30 * u), int(y + 18 * u)
-    cv.disc(int(x + 46 * u), int(y + 4 * u), max(1, int(2 * u)), GOLD)
+    # solid gold 4-point star (two triangles = a diamond star)
+    sx, sy = int(x + 46 * u), int(y + 4 * u)
+    cv.triangle(sx, sy - int(4 * u), sx - int(2 * u), sy, sx + int(2 * u), sy, GOLD)
+    cv.triangle(sx, sy + int(4 * u), sx - int(2 * u), sy, sx + int(2 * u), sy, GOLD)
     cv.disc(int(x + 10 * u), int(y + 30 * u), max(1, int(2 * u)), WHITE)
     cv.disc(int(x + 58 * u), int(y + 28 * u), max(1, int(2 * u)), WHITE)
     cv.ring(cx, cy, int(10 * u), NAVY_SOFT, max(1, t - 1))
     cv.ring(cx, cy, int(17 * u), NAVY_SOFT, max(1, t - 1))
     cv.triangle(cx, int(y + 8 * u), int(x + 18 * u), int(y + 28 * u), int(x + 42 * u), int(y + 28 * u), GOLD)
-    cv.disc(cx, int(y + 22 * u), max(2, int(4 * u)), NAVY)
+    cv.disc(cx, int(y + 22 * u), max(2, int(5 * u)), NAVY)  # solid body
 
 # ---------------------------------------------------------------- sunset hero
 def vgrad(cv, x, y, w, h, stops):
@@ -569,19 +618,77 @@ def vgrad(cv, x, y, w, h, stops):
             cv.rowfill(x * s, (y + r) * s + dy, w * s, col)
 
 
+def _interp_stops(stops, t):
+    """Interpolate a [(frac, color), ...] gradient at fraction t."""
+    for i in range(len(stops) - 1):
+        if stops[i][0] <= t <= stops[i + 1][0]:
+            t0, c0 = stops[i]
+            t1, c1 = stops[i + 1]
+            f = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+            return tuple(int(round(c0[k] + (c1[k] - c0[k]) * f)) for k in range(3))
+    return stops[-1][1]
+
+
 def _tower_row(cv, x, y, w, sky_h, towers, color, windows=False, idx0=0):
-    """One skyline layer: towers sit on the horizon (y + sky_h)."""
-    for idx, (dx, bw, bh) in enumerate(towers):
+    """One skyline layer: towers sit on the horizon (y + sky_h).
+    Each tower: (dx, bw, bh, kind), kind in rect/step/taper/spire/dome.
+    Windows follow the silhouette segments, so stepped and tapered towers
+    keep lit windows inside their outline."""
+    base = y + sky_h
+    for idx, tw in enumerate(towers):
+        dx, bw, bh = tw[0], tw[1], tw[2]
+        kind = tw[3] if len(tw) > 3 else 'rect'
         bx = x + int(dx * w)
         bwpx = max(4, int(bw * w))
         bhpx = int(bh * sky_h)
-        cv.rect(bx, y + sky_h - bhpx, bwpx, bhpx, color)
+        segs = []  # (sx, sy, sw, sh) absolute logical rects
+        if kind == 'rect':
+            segs = [(bx, base - bhpx, bwpx, bhpx)]
+        elif kind == 'step':
+            # two setbacks: wide base, narrower middle, narrow cap
+            h1, h2 = int(bhpx * 0.55), int(bhpx * 0.30)
+            h3 = bhpx - h1 - h2
+            w2, w3 = int(bwpx * 0.72), int(bwpx * 0.45)
+            segs = [(bx, base - h1, bwpx, h1),
+                    (bx + (bwpx - w2) // 2, base - h1 - h2, w2, h2),
+                    (bx + (bwpx - w3) // 2, base - h1 - h2 - h3, w3, h3)]
+        elif kind == 'taper':
+            # Ping An: five stacked slabs narrowing to a point + antenna
+            n = 5
+            fh = bhpx // n
+            for i in range(n):
+                fw = int(bwpx * (1.0 - 0.62 * i / (n - 1)))
+                segs.append((bx + (bwpx - fw) // 2, base - (i + 1) * fh,
+                             fw, fh + (1 if i == n - 1 else 0)))
+            ax = bx + bwpx // 2
+            cv.line(ax, base - bhpx, ax, base - bhpx - 9, color, 3)
+            cv.disc(ax, base - bhpx - 9, 2, GOLD)
+        elif kind == 'spire':
+            rh = int(bhpx * 0.82)
+            segs = [(bx, base - rh, bwpx, rh)]
+            cv.triangle(bx + bwpx // 2, base - bhpx, bx, base - rh,
+                        bx + bwpx, base - rh, color)
+            ax = bx + bwpx // 2
+            cv.line(ax, base - bhpx, ax, base - bhpx - 7, color, 2)
+        elif kind == 'dome':
+            # radius capped so the dome never exceeds the tower height
+            # (a too-wide dome reads as a hill, not a building)
+            r = min(bwpx // 2, int(bhpx * 0.55))
+            rh = bhpx - r
+            segs = [(bx, base - rh, bwpx, rh)]
+            cx = bx + bwpx // 2
+            for dy in range(0, r + 1):
+                hw = int((r * r - (r - dy) * (r - dy)) ** 0.5)
+                cv.hline(cx - hw, base - bhpx + dy, 2 * hw + 1, color, 1)
+        for (sx, sy, sw, sh) in segs:
+            cv.rect(sx, sy, sw, sh, color)
         if windows:
-            for col in range(bwpx // 10):
-                for row in range(bhpx // 9):
-                    if (col + 2 * row + idx + idx0) % 4 == 0:
-                        cv.rect(bx + 3 + col * 10, y + sky_h - bhpx + 3 + row * 9,
-                                2, 2, GOLD)
+            for (sx, sy, sw, sh) in segs:
+                for col in range(max(1, sw // 10)):
+                    for row in range(max(1, sh // 9)):
+                        if (col + 2 * row + idx + idx0) % 4 == 0:
+                            cv.rect(sx + 3 + col * 10, sy + 3 + row * 9,
+                                    2, 2, GOLD)
 
 
 def draw_hero(cv, x, y, w, h):
@@ -589,32 +696,38 @@ def draw_hero(cv, x, y, w, h):
     between towers, three skyline depths with lit windows, water with sun
     reflections. All positions fixed (deterministic)."""
     sky_h = int(h * 0.70)
-    vgrad(cv, x, y, w, sky_h,
-          [(0.0, (30, 30, 78)), (0.35, (104, 70, 132)),
-           (0.62, (214, 110, 88)), (0.85, (248, 176, 104)),
-           (1.0, (252, 200, 130))])
-    back = [(0.00, 0.09, 0.40), (0.14, 0.08, 0.60), (0.27, 0.10, 0.35),
-            (0.42, 0.08, 0.55), (0.55, 0.10, 0.38), (0.70, 0.08, 0.58),
-            (0.83, 0.09, 0.42), (0.94, 0.06, 0.50)]
-    _tower_row(cv, x, y, w, sky_h, back, TOWER_BACK)
-    mid = [(0.06, 0.08, 0.70), (0.20, 0.09, 0.52), (0.34, 0.08, 0.78),
-           (0.47, 0.07, 0.60), (0.60, 0.08, 0.72), (0.76, 0.09, 0.55),
-           (0.90, 0.07, 0.65)]
-    _tower_row(cv, x, y, w, sky_h, mid, TOWER_MID, windows=True, idx0=5)
-    # spire on the tallest mid tower (Ping An)
-    tx = x + int(0.38 * w)
-    top = y + sky_h - int(0.78 * sky_h)
-    cv.line(tx, top, tx, top - 10, TOWER_MID, 3)
-    cv.disc(tx, top - 10, 2, GOLD)
-    # low sun with halo, in the gap between the mid towers at 0.60-0.68
-    # and 0.76+, and between the front towers at 0.62-0.70 and 0.78+
+    stops = [(0.0, (30, 30, 78)), (0.35, (104, 70, 132)),
+             (0.62, (214, 110, 88)), (0.85, (248, 176, 104)),
+             (1.0, (252, 200, 130))]
+    vgrad(cv, x, y, w, sky_h, stops)
+    # low sun position (in the gap between the mid towers at 0.60-0.68 and
+    # 0.76+, and between the front towers at 0.62-0.70 and 0.78+)
     sunx = x + int(w * 0.72)
     suny = y + int(sky_h * 0.45)
-    cv.disc(sunx, suny, 20, (240, 170, 100))
+    # soft radial glow: concentric rings fading to the local sky colour,
+    # drawn before the towers so the towers occlude it
+    skycol = _interp_stops(stops, 0.45)
+    for r in range(30, 14, -1):
+        f = 1.0 - (r - 14) / 16.0  # 0 at the edge -> ~1 near the core
+        col = tuple(int(round(skycol[k] + (SUN[k] - skycol[k]) * f))
+                    for k in range(3))
+        cv.disc(sunx, suny, r, col)
+    back = [(0.00, 0.09, 0.40, 'rect'), (0.14, 0.08, 0.60, 'step'),
+            (0.27, 0.10, 0.35, 'rect'), (0.42, 0.08, 0.55, 'dome'),
+            (0.55, 0.10, 0.38, 'step'), (0.70, 0.08, 0.58, 'rect'),
+            (0.83, 0.09, 0.42, 'rect'), (0.94, 0.06, 0.50, 'spire')]
+    _tower_row(cv, x, y, w, sky_h, back, TOWER_BACK)
+    mid = [(0.06, 0.08, 0.70, 'step'), (0.20, 0.09, 0.52, 'rect'),
+           (0.34, 0.08, 0.78, 'taper'), (0.47, 0.07, 0.60, 'spire'),
+           (0.60, 0.08, 0.72, 'step'), (0.76, 0.09, 0.55, 'rect'),
+           (0.90, 0.07, 0.65, 'dome')]
+    _tower_row(cv, x, y, w, sky_h, mid, TOWER_MID, windows=True, idx0=5)
+    # low sun core, painted over the back/mid silhouettes in its gap
     cv.disc(sunx, suny, 14, SUN)
-    front = [(0.03, 0.10, 0.55), (0.18, 0.08, 0.68), (0.31, 0.11, 0.42),
-             (0.47, 0.09, 0.60), (0.62, 0.08, 0.48), (0.78, 0.10, 0.58),
-             (0.93, 0.07, 0.50)]
+    front = [(0.03, 0.10, 0.55, 'step'), (0.18, 0.08, 0.68, 'rect'),
+             (0.31, 0.11, 0.42, 'dome'), (0.47, 0.09, 0.60, 'step'),
+             (0.62, 0.08, 0.48, 'rect'), (0.78, 0.10, 0.58, 'spire'),
+             (0.93, 0.07, 0.50, 'rect')]
     _tower_row(cv, x, y, w, sky_h, front, TOWER_FRONT, windows=True)
     # water + sun reflection
     cv.fast_rect(x, y + sky_h, w, h - sky_h, WATER)
