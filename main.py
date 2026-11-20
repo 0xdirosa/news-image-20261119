@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""news-image-20261119: draws a one-day world-news front page as a 1024x1024 PNG.
+"""news-image-20261119 v2: draws a one-day world-news front page as a 1024x1024 PNG.
 
 Pure Python 3 standard library only (os, struct, zlib). No network, no files
 read at runtime, no randomness, no clock. Fully deterministic: the same bytes
 come out of every run.
+
+v2 vs v1: a vector stroke font replaces the 5x7 bitmap font (smooth, scalable
+letters, legible at 300px); 21 stories instead of 9, 15 of them pictured with
+larger pictograms; the three unverified/stale v1 panels are gone (GTA VI sale,
+Voyager "one light-day away", UN court "to rule").
 """
 
 import math
@@ -22,64 +27,72 @@ GOLD = (201, 162, 39)
 GREEN = (31, 122, 74)
 GREY = (90, 96, 104)
 LIGHT_LINE = (205, 198, 182)
+SKY = (178, 214, 235)
 
-# ---------------------------------------------------------------- 5x7 font
-# Each glyph: 7 rows of 5 bits, '#' = on. Covers A-Z, 0-9 and , . : - / $ % & ' ( ) ! ? and bullet.
-_G = {
-    'A': ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
-    'B': ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
-    'C': ("01110", "10001", "10000", "10000", "10000", "10001", "01110"),
-    'D': ("11110", "10001", "10001", "10001", "10001", "10001", "11110"),
-    'E': ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
-    'F': ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
-    'G': ("01110", "10001", "10000", "10111", "10001", "10001", "01111"),
-    'H': ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
-    'I': ("01110", "00100", "00100", "00100", "00100", "00100", "01110"),
-    'J': ("00111", "00010", "00010", "00010", "00010", "10010", "01100"),
-    'K': ("10001", "10010", "10100", "11000", "10100", "10010", "10001"),
-    'L': ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
-    'M': ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
-    'N': ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
-    'O': ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
-    'P': ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
-    'Q': ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
-    'R': ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
-    'S': ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
-    'T': ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
-    'U': ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
-    'V': ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
-    'W': ("10001", "10001", "10001", "10101", "10101", "11011", "10001"),
-    'X': ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
-    'Y': ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
-    'Z': ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
-    '0': ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
-    '1': ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
-    '2': ("01110", "10001", "00001", "00110", "01000", "10000", "11111"),
-    '3': ("11111", "00010", "00100", "00010", "00001", "10001", "01110"),
-    '4': ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
-    '5': ("11111", "10000", "11110", "00001", "00001", "10001", "01110"),
-    '6': ("00110", "01000", "10000", "11110", "10001", "10001", "01110"),
-    '7': ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
-    '8': ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
-    '9': ("01110", "10001", "10001", "01111", "00001", "00010", "01100"),
-    ' ': ("00000", "00000", "00000", "00000", "00000", "00000", "00000"),
-    ',': ("00000", "00000", "00000", "00000", "00100", "00100", "01000"),
-    '.': ("00000", "00000", "00000", "00000", "00000", "01100", "01100"),
-    ':': ("00000", "01100", "01100", "00000", "01100", "01100", "00000"),
-    '-': ("00000", "00000", "00000", "01110", "00000", "00000", "00000"),
-    '/': ("00001", "00010", "00010", "00100", "01000", "01000", "10000"),
-    '$': ("00100", "01111", "10100", "01110", "00101", "11110", "00100"),
-    '%': ("11001", "11010", "00010", "00100", "01000", "01011", "10011"),
-    '&': ("01100", "10010", "10100", "01000", "10101", "10010", "01101"),
-    "'": ("00100", "00100", "01000", "00000", "00000", "00000", "00000"),
-    '(': ("00010", "00100", "01000", "01000", "01000", "00100", "00010"),
-    ')': ("01000", "00100", "00010", "00010", "00010", "00100", "01000"),
-    '!': ("00100", "00100", "00100", "00100", "00100", "00000", "00100"),
-    '?': ("01110", "10001", "00001", "00110", "00100", "00000", "00100"),
-    '\u2022': ("00000", "00000", "01100", "01100", "00000", "00000", "00000"),
+# ---------------------------------------------------------------- stroke font
+# Each glyph: list of strokes; each stroke is a polyline of (x, y) points on a
+# 5 wide x 7 tall grid (y down). Drawn with line() at a scale, so letters stay
+# smooth at any size. All text is upper-case.
+_S = {
+    'A': [[(0, 6), (2, 0), (4, 6)], [(1, 4), (3, 4)]],
+    'B': [[(0, 0), (0, 6)], [(0, 0), (3, 0), (4, 1), (4, 2), (3, 3), (0, 3)],
+          [(0, 3), (3, 3), (4, 4), (4, 5), (3, 6), (0, 6)]],
+    'C': [[(4, 1), (3, 0), (1, 0), (0, 1), (0, 5), (1, 6), (3, 6), (4, 5)]],
+    'D': [[(0, 0), (0, 6)], [(0, 0), (3, 0), (4, 1), (4, 5), (3, 6), (0, 6)]],
+    'E': [[(0, 0), (0, 6)], [(0, 0), (4, 0)], [(0, 3), (3, 3)], [(0, 6), (4, 6)]],
+    'F': [[(0, 0), (0, 6)], [(0, 0), (4, 0)], [(0, 3), (3, 3)]],
+    'G': [[(4, 1), (3, 0), (1, 0), (0, 1), (0, 5), (1, 6), (3, 6), (4, 5), (4, 3), (2, 3)]],
+    'H': [[(0, 0), (0, 6)], [(4, 0), (4, 6)], [(0, 3), (4, 3)]],
+    'I': [[(1, 0), (3, 0)], [(2, 0), (2, 6)], [(1, 6), (3, 6)]],
+    'J': [[(4, 0), (4, 5), (3, 6), (1, 6), (0, 5), (0, 4)]],
+    'K': [[(0, 0), (0, 6)], [(4, 0), (0, 3), (4, 6)]],
+    'L': [[(0, 0), (0, 6), (4, 6)]],
+    'M': [[(0, 6), (0, 0), (2, 3), (4, 0), (4, 6)]],
+    'N': [[(0, 6), (0, 0), (4, 6), (4, 0)]],
+    'O': [[(1, 0), (3, 0), (4, 1), (4, 5), (3, 6), (1, 6), (0, 5), (0, 1), (1, 0)]],
+    'P': [[(0, 6), (0, 0), (3, 0), (4, 1), (4, 2), (3, 3), (0, 3)]],
+    'Q': [[(1, 0), (3, 0), (4, 1), (4, 5), (3, 6), (1, 6), (0, 5), (0, 1), (1, 0)],
+          [(2, 4), (4, 6)]],
+    'R': [[(0, 6), (0, 0), (3, 0), (4, 1), (4, 2), (3, 3), (0, 3)], [(2, 3), (4, 6)]],
+    'S': [[(4, 1), (3, 0), (1, 0), (0, 1), (0, 2), (1, 3), (3, 3), (4, 4), (4, 5), (3, 6), (1, 6), (0, 5)]],
+    'T': [[(0, 0), (4, 0)], [(2, 0), (2, 6)]],
+    'U': [[(0, 0), (0, 5), (1, 6), (3, 6), (4, 5), (4, 0)]],
+    'V': [[(0, 0), (2, 6), (4, 0)]],
+    'W': [[(0, 0), (1, 6), (2, 3), (3, 6), (4, 0)]],
+    'X': [[(0, 0), (4, 6)], [(4, 0), (0, 6)]],
+    'Y': [[(0, 0), (2, 3), (4, 0)], [(2, 3), (2, 6)]],
+    'Z': [[(0, 0), (4, 0), (0, 6), (4, 6)]],
+    '0': [[(1, 0), (3, 0), (4, 1), (4, 5), (3, 6), (1, 6), (0, 5), (0, 1), (1, 0)]],
+    '1': [[(1, 1), (2, 0), (2, 6)], [(0, 6), (4, 6)]],
+    '2': [[(0, 1), (1, 0), (3, 0), (4, 1), (4, 2), (0, 6), (4, 6)]],
+    '3': [[(1, 0), (3, 0), (4, 1), (4, 2), (2, 3), (4, 4), (4, 5), (3, 6), (1, 6)]],
+    '4': [[(0, 0), (0, 4), (4, 4)], [(3, 0), (3, 6)]],
+    '5': [[(4, 0), (0, 0), (0, 3), (3, 3), (4, 4), (4, 5), (3, 6), (1, 6), (0, 5)]],
+    '6': [[(4, 1), (3, 0), (1, 0), (0, 1), (0, 5), (1, 6), (3, 6), (4, 5), (4, 4), (3, 3), (0, 3)]],
+    '7': [[(0, 0), (4, 0), (1, 6)]],
+    '8': [[(1, 0), (3, 0), (4, 1), (4, 5), (3, 6), (1, 6), (0, 5), (0, 1), (1, 0)],
+          [(0, 3), (4, 3)]],
+    '9': [[(1, 0), (3, 0), (4, 1), (4, 4), (3, 5), (1, 5), (0, 4), (0, 1), (1, 0)],
+          [(4, 1), (4, 6)]],
+    ' ': [],
+    ',': [[(2, 5), (2, 6), (1, 7)]],
+    '.': [[(2, 5.4), (2, 6.2)]],
+    ':': [[(2, 1.4), (2, 2.2)], [(2, 4.4), (2, 5.2)]],
+    '-': [[(0.5, 3), (3.5, 3)]],
+    '/': [[(4, 0), (0, 6)]],
+    '$': [[(2, 0), (2, 6)],
+          [(4, 1), (3, 0), (1, 0), (0, 1), (0, 2), (1, 3), (3, 3), (4, 4), (4, 5), (3, 6), (1, 6), (0, 5)]],
+    '%': [[(0, 0), (0, 1)], [(4, 5), (4, 6)], [(4, 0), (0, 6)]],
+    '&': [[(3, 0), (1, 0), (0, 1), (0, 3), (2, 3), (4, 5), (4, 6), (2, 6), (1, 5), (3, 3)]],
+    "'": [[(2, 0), (2, 2)]],
+    '(': [[(3, 0), (2, 1), (2, 5), (3, 6)]],
+    ')': [[(1, 0), (2, 1), (2, 5), (1, 6)]],
+    '!': [[(2, 0), (2, 4)], [(2, 5.4), (2, 6.2)]],
+    '?': [[(1, 1), (2, 0), (3, 0), (4, 1), (4, 2), (3, 3), (2, 3)], [(2, 5.4), (2, 6.2)]],
+    '\u2022': [[(2, 2.6), (2, 3.4)]],
+    '\u2014': [[(0, 3), (4, 3)]],
+    '\u00b7': [[(2, 2.6), (2, 3.4)]],
 }
-# Em dash renders as a hyphen.
-_G['\u2014'] = _G['-']
 
 
 # ---------------------------------------------------------------- canvas
@@ -134,20 +147,28 @@ class Canvas:
 
     def ring(self, cx, cy, r, c, t=2):
         for a in range(0, 360):
-            x = int(cx + r * math.cos(a * 3.141592653589793 / 180.0) + 0.5)
-            y = int(cy + r * math.sin(a * 3.141592653589793 / 180.0) + 0.5)
+            x = int(cx + r * math.cos(a * math.pi / 180.0) + 0.5)
+            y = int(cy + r * math.sin(a * math.pi / 180.0) + 0.5)
             self.rect(x - t // 2, y - t // 2, t, t, c)
+
+    def arc(self, cx, cy, r, c, a0, a1, t=2):
+        a = a0
+        while a <= a1:
+            x = int(cx + r * math.cos(a * math.pi / 180.0) + 0.5)
+            y = int(cy + r * math.sin(a * math.pi / 180.0) + 0.5)
+            self.rect(x - t // 2, y - t // 2, t, t, c)
+            a += 2
 
     def arc_top(self, cx, cy, r, c, t=2):
-        for a in range(180, 361):
-            x = int(cx + r * math.cos(a * 3.141592653589793 / 180.0) + 0.5)
-            y = int(cy + r * math.sin(a * 3.141592653589793 / 180.0) + 0.5)
-            self.rect(x - t // 2, y - t // 2, t, t, c)
+        self.arc(cx, cy, r, c, 180, 360, t)
 
     def arc_bottom(self, cx, cy, r, c, t=2):
-        for a in range(0, 181):
-            x = int(cx + r * math.cos(a * 3.141592653589793 / 180.0) + 0.5)
-            y = int(cy + r * math.sin(a * 3.141592653589793 / 180.0) + 0.5)
+        self.arc(cx, cy, r, c, 0, 180, t)
+
+    def ellipse(self, cx, cy, rx, ry, c, t=2):
+        for a in range(0, 360, 2):
+            x = int(cx + rx * math.cos(a * math.pi / 180.0) + 0.5)
+            y = int(cy + ry * math.sin(a * math.pi / 180.0) + 0.5)
             self.rect(x - t // 2, y - t // 2, t, t, c)
 
     def triangle(self, x0, y0, x1, y1, x2, y2, c):
@@ -163,25 +184,32 @@ class Canvas:
                 self.rect(int(min(xs)), y, int(max(xs)) - int(min(xs)) + 1, 1, c)
 
 
+def _thick(scale, bold):
+    # stroke thickness in px for a glyph at this scale
+    if bold:
+        return 1 if scale < 1.5 else max(2, int(round(scale * 0.55)))
+    return 1 if scale < 2 else max(1, int(round(scale * 0.36)))
+
+
 def text_width(s, scale):
-    return len(s) * 6 * scale - scale if s else 0
+    return int(len(s) * 6 * scale - scale) if s else 0
 
 
-def draw_text(cv, x, y, s, scale, color):
+def draw_text(cv, x, y, s, scale, color, bold=False):
+    """Draw stroke-font text; y is the top of the cap height. Returns end x."""
+    t = _thick(scale, bold)
     cx = x
     for ch in s:
-        glyph = _G.get(ch, _G[' '])
-        for row in range(7):
-            bits = glyph[row]
-            for col in range(5):
-                if bits[col] == '1':
-                    cv.rect(cx + col * scale, y + row * scale, scale, scale, color)
-        cx += 6 * scale
+        for stroke in _S.get(ch, _S[' ']):
+            pts = [(int(round(cx + px * scale)), int(round(y + py * scale))) for px, py in stroke]
+            for a, b in zip(pts, pts[1:]):
+                cv.line(a[0], a[1], b[0], b[1], color, t)
+        cx += int(round(6 * scale))
     return cx
 
 
-def draw_text_centered(cv, cx, y, s, scale, color):
-    draw_text(cv, cx - text_width(s, scale) // 2, y, s, scale, color)
+def draw_text_centered(cv, cx, y, s, scale, color, bold=False):
+    draw_text(cv, cx - text_width(s, scale) // 2, y, s, scale, color, bold)
 
 
 def wrap(s, scale, max_w):
@@ -199,15 +227,25 @@ def wrap(s, scale, max_w):
     return lines
 
 
-def draw_block(cv, x, y, s, scale, max_w, color, leading=None):
+def draw_block(cv, x, y, s, scale, max_w, color, leading=None, bold=False):
     lines = wrap(s, scale, max_w)
-    lh = leading if leading is not None else 7 * scale + 3
+    lh = leading if leading is not None else int(7 * scale + 3)
     for i, ln in enumerate(lines):
-        draw_text(cv, x, y + i * lh, ln, scale, color)
+        draw_text(cv, x, y + i * lh, ln, scale, color, bold)
     return len(lines) * lh
 
-
 # ---------------------------------------------------------------- pictograms
+# Each icon draws inside a ~60u x 44u box at (x, y); u = px per unit.
+def _rot_ellipse(cv, cx, cy, rx, ry, ang, c, t=2):
+    ca, sa = math.cos(ang), math.sin(ang)
+    for a in range(0, 360, 2):
+        px = rx * math.cos(a * math.pi / 180.0)
+        py = ry * math.sin(a * math.pi / 180.0)
+        x = int(cx + px * ca - py * sa + 0.5)
+        y = int(cy + px * sa + py * ca + 0.5)
+        cv.rect(x - t // 2, y - t // 2, t, t, c)
+
+
 def flag_us(cv, x, y, w, h):
     stripe = h // 7
     for i in range(7):
@@ -233,143 +271,295 @@ def flag_ru(cv, x, y, w, h):
     cv.rect(x, y + 2 * third, w, h - 2 * third, RED)
 
 
-def icon_tanker(cv, x, y):
-    # explosion starburst above a tanker hull on waves
-    for dx, dy in ((-16, -6), (-8, -12), (0, -14), (8, -12), (16, -6)):
-        cv.line(x + 30, y + 12, x + 30 + dx, y + 12 + dy, GOLD, 2)
-    cv.disc(x + 30, y + 12, 5, GOLD)
-    cv.rect(x + 4, y + 20, 52, 9, NAVY)
-    cv.rect(x + 10, y + 14, 14, 6, NAVY)
-    cv.triangle(x + 56, y + 20, x + 56, y + 29, x + 46, y + 29, NAVY)
-    cv.line(x, y + 33, x + 60, y + 33, NAVY_SOFT, 2)
-    cv.line(x + 8, y + 37, x + 52, y + 37, NAVY_SOFT, 2)
+def icon_scales(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cv.vline(int(x + 30 * u), int(y + 4 * u), int(26 * u), NAVY, t)
+    cv.hline(int(x + 8 * u), int(y + 8 * u), int(44 * u), NAVY, t)
+    cv.disc(int(x + 30 * u), int(y + 6 * u), max(2, int(3 * u)), NAVY)
+    cv.line(int(x + 8 * u), int(y + 8 * u), int(x + 8 * u), int(y + 20 * u), NAVY, max(1, t - 1))
+    cv.line(int(x + 52 * u), int(y + 8 * u), int(x + 52 * u), int(y + 20 * u), NAVY, max(1, t - 1))
+    cv.arc_bottom(int(x + 8 * u), int(y + 20 * u), int(9 * u), NAVY, max(1, t - 1))
+    cv.arc_bottom(int(x + 52 * u), int(y + 20 * u), int(9 * u), NAVY, max(1, t - 1))
+    cv.hline(int(x + 20 * u), int(y + 32 * u), int(20 * u), NAVY, t)
+    cv.hline(int(x + 16 * u), int(y + 36 * u), int(28 * u), NAVY, t)
 
 
-def icon_bridge(cv, x, y):
-    cv.arc_top(x + 30, y + 26, 24, NAVY, 3)
-    cv.hline(x, y + 26, 60, NAVY, 3)
-    cv.vline(x + 8, y + 10, 18, NAVY, 3)
-    cv.vline(x + 52, y + 10, 18, NAVY, 3)
-    cv.line(x + 30, y + 2, x + 30, y + 26, RED, 2)
+def icon_tanker(cv, x, y, u):
+    t = max(2, int(2 * u))
+    for dx, dy in ((-16, -6), (-8, -12), (0, -14), (8, -12), (16, -6), (-20, 2), (20, 2)):
+        cv.line(int(x + 30 * u), int(y + 12 * u), int(x + (30 + dx) * u), int(y + (12 + dy) * u), GOLD, max(1, t - 1))
+    cv.disc(int(x + 30 * u), int(y + 12 * u), max(2, int(5 * u)), GOLD)
+    cv.rect(int(x + 4 * u), int(y + 20 * u), int(52 * u), int(9 * u), NAVY)
+    cv.rect(int(x + 10 * u), int(y + 14 * u), int(14 * u), int(6 * u), NAVY)
+    cv.triangle(int(x + 56 * u), int(y + 20 * u), int(x + 56 * u), int(y + 29 * u), int(x + 46 * u), int(y + 29 * u), NAVY)
+    cv.line(int(x), int(y + 33 * u), int(x + 60 * u), int(y + 33 * u), NAVY_SOFT, max(1, t - 1))
+    cv.line(int(x + 8 * u), int(y + 37 * u), int(x + 52 * u), int(y + 37 * u), NAVY_SOFT, max(1, t - 1))
 
 
-def icon_chart(cv, x, y):
-    cv.hline(x, y + 30, 60, NAVY, 2)
-    cv.vline(x, y, 32, NAVY, 2)
-    pts = [(x + 4, y + 26), (x + 18, y + 20), (x + 30, y + 22), (x + 44, y + 10), (x + 56, y + 4)]
+def icon_bridge(cv, x, y, u):
+    t = max(2, int(3 * u))
+    cv.arc_top(int(x + 30 * u), int(y + 28 * u), int(24 * u), NAVY, t)
+    cv.hline(int(x), int(y + 28 * u), int(60 * u), NAVY, t)
+    cv.vline(int(x + 8 * u), int(y + 10 * u), int(20 * u), NAVY, max(1, t - 1))
+    cv.vline(int(x + 52 * u), int(y + 10 * u), int(20 * u), NAVY, max(1, t - 1))
+    # red crack down the middle of the deck
+    cv.line(int(x + 30 * u), int(y + 2 * u), int(x + 28 * u), int(y + 14 * u), RED, max(1, t - 1))
+    cv.line(int(x + 28 * u), int(y + 14 * u), int(x + 32 * u), int(y + 26 * u), RED, max(1, t - 1))
+
+
+def icon_chart(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cv.hline(int(x), int(y + 32 * u), int(60 * u), NAVY, max(1, t - 1))
+    cv.vline(int(x), int(y + 2 * u), int(32 * u), NAVY, max(1, t - 1))
+    pts = [(4, 28), (18, 22), (30, 24), (44, 12), (56, 6)]
     for a, b in zip(pts, pts[1:]):
-        cv.line(a[0], a[1], b[0], b[1], GREEN, 3)
-    cv.triangle(x + 56, y + 4, x + 48, y + 2, x + 54, y + 12, GREEN)
+        cv.line(int(x + a[0] * u), int(y + a[1] * u), int(x + b[0] * u), int(y + b[1] * u), GREEN, t)
+    cv.triangle(int(x + 56 * u), int(y + 6 * u), int(x + 48 * u), int(y + 4 * u), int(x + 54 * u), int(y + 14 * u), GREEN)
+    cv.disc(int(x + 44 * u), int(y + 12 * u), max(1, int(2 * u)), GREEN)
 
 
-def icon_controller(cv, x, y):
-    cv.rect(x + 4, y + 8, 52, 22, NAVY)
-    cv.disc(x + 4, y + 19, 11, NAVY)
-    cv.disc(x + 56, y + 19, 11, NAVY)
-    # D-pad: white plus
-    cv.rect(x + 14, y + 15, 4, 12, WHITE)
-    cv.rect(x + 10, y + 19, 12, 4, WHITE)
-    cv.disc(x + 44, y + 15, 3, GOLD)
-    cv.disc(x + 50, y + 21, 3, RED)
-    cv.disc(x + 38, y + 21, 3, WHITE)
+def icon_globe(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cx, cy, r = int(x + 28 * u), int(y + 22 * u), int(16 * u)
+    cv.ring(cx, cy, r, NAVY_SOFT, t)
+    cv.ellipse(cx, cy, int(7 * u), r, NAVY_SOFT, max(1, t - 1))
+    cv.line(cx - r, cy, cx + r, cy, NAVY_SOFT, max(1, t - 1))
+    cv.line(cx - int(13 * u), cy - int(9 * u), cx + int(13 * u), cy - int(9 * u), NAVY_SOFT, max(1, t - 1))
+    cv.line(cx - int(13 * u), cy + int(9 * u), cx + int(13 * u), cy + int(9 * u), NAVY_SOFT, max(1, t - 1))
+    # sprout on top: two leaves
+    cv.line(cx, cy - r, cx, cy - r - int(7 * u), GREEN, t)
+    cv.line(cx, cy - r - int(4 * u), cx - int(7 * u), cy - r - int(8 * u), GREEN, max(1, t - 1))
+    cv.line(cx, cy - r - int(4 * u), cx + int(7 * u), cy - r - int(8 * u), GREEN, max(1, t - 1))
 
 
-def icon_voyager(cv, x, y):
-    cv.disc(x + 46, y + 4, 2, GOLD)
-    cv.disc(x + 10, y + 28, 2, WHITE)
-    cv.disc(x + 58, y + 26, 2, WHITE)
-    cv.ring(x + 30, y + 16, 10, NAVY_SOFT, 2)
-    cv.ring(x + 30, y + 16, 16, NAVY_SOFT, 2)
-    cv.triangle(x + 30, y + 8, x + 18, y + 26, x + 42, y + 26, GOLD)
-    cv.disc(x + 30, y + 20, 4, NAVY)
+def icon_cyclone(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cx, cy = int(x + 30 * u), int(y + 17 * u)
+    for r0, a0, a1 in ((4, 0, 300), (8, 40, 340), (12, 80, 380), (16, 120, 420)):
+        cv.arc(cx, cy, int(r0 * u), NAVY_SOFT, a0, a1, max(1, t - 1))
+    cv.disc(cx, cy, max(1, int(2 * u)), NAVY)
+    for dx in (-18, 0, 18):
+        cv.line(int(x + (30 + dx) * u), int(y + 34 * u), int(x + (28 + dx) * u), int(y + 40 * u), NAVY_SOFT, max(1, t - 1))
 
 
-def icon_scales(cv, x, y):
-    # pillar, beam, two hanging bowl pans
-    cv.vline(x + 30, y + 2, 28, NAVY, 3)
-    cv.hline(x + 8, y + 6, 44, NAVY, 3)
-    cv.disc(x + 30, y + 4, 3, NAVY)
-    cv.line(x + 8, y + 6, x + 8, y + 18, NAVY, 2)
-    cv.line(x + 52, y + 6, x + 52, y + 18, NAVY, 2)
-    cv.arc_bottom(x + 8, y + 18, 8, NAVY, 2)
-    cv.arc_bottom(x + 52, y + 18, 8, NAVY, 2)
-    cv.hline(x + 22, y + 30, 16, NAVY, 3)
+def icon_flame(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cx = int(x + 30 * u)
+    # outer flame: two arcs meeting at the tip
+    cv.arc(cx, int(y + 24 * u), int(14 * u), RED, 200, 340, t)
+    cv.line(int(x + 16 * u), int(y + 24 * u), cx, int(y + 2 * u), RED, t)
+    cv.line(int(x + 44 * u), int(y + 24 * u), cx, int(y + 2 * u), RED, t)
+    cv.arc(cx, int(y + 28 * u), int(13 * u), RED, 0, 180, t)
+    # inner flame
+    cv.arc(cx, int(y + 28 * u), int(7 * u), GOLD, 200, 340, max(1, t - 1))
+    cv.line(int(x + 23 * u), int(y + 28 * u), cx, int(y + 12 * u), GOLD, max(1, t - 1))
+    cv.line(int(x + 37 * u), int(y + 28 * u), cx, int(y + 12 * u), GOLD, max(1, t - 1))
+    cv.arc(cx, int(y + 30 * u), int(6 * u), GOLD, 0, 180, max(1, t - 1))
+    cv.hline(int(x + 12 * u), int(y + 40 * u), int(36 * u), NAVY, max(1, t - 1))
 
+
+def icon_tower(cv, x, y, u):
+    t = max(2, int(2 * u))
+    bx, bw = int(x + 22 * u), int(16 * u)
+    cv.rect(bx, int(y + 12 * u), bw, int(26 * u), NAVY)
+    cv.triangle(bx + bw // 2, int(y + 2 * u), bx, int(y + 12 * u), bx + bw, int(y + 12 * u), NAVY)
+    for r in range(3):
+        for c in range(2):
+            cv.rect(bx + int((3 + c * 7) * u), int(y + (16 + r * 7) * u), max(1, int(3 * u)), max(1, int(3 * u)), GOLD)
+    # crack + blast star at the top
+    cv.line(bx + bw // 2, int(y + 12 * u), bx + bw // 2 - int(4 * u), int(y + 20 * u), RED, max(1, t - 1))
+    cv.line(bx + bw // 2 - int(4 * u), int(y + 20 * u), bx + bw // 2 + int(2 * u), int(y + 26 * u), RED, max(1, t - 1))
+    for dx, dy in ((-8, -4), (8, -4), (0, -8), (-5, 3), (5, 3)):
+        cv.line(int(x + 48 * u), int(y + 8 * u), int(x + (48 + dx) * u), int(y + (8 + dy) * u), GOLD, max(1, t - 1))
+    cv.disc(int(x + 48 * u), int(y + 8 * u), max(1, int(3 * u)), GOLD)
+    cv.hline(int(x + 8 * u), int(y + 40 * u), int(44 * u), NAVY, max(1, t - 1))
+
+
+def icon_tank(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cv.rect(int(x + 8 * u), int(y + 22 * u), int(44 * u), int(10 * u), NAVY)
+    cv.rect(int(x + 20 * u), int(y + 14 * u), int(18 * u), int(8 * u), NAVY)
+    cv.line(int(x + 38 * u), int(y + 18 * u), int(x + 56 * u), int(y + 14 * u), NAVY, t)
+    for wx in (14, 24, 34, 44):
+        cv.disc(int(x + wx * u), int(y + 34 * u), max(1, int(3 * u)), NAVY_SOFT)
+    cv.hline(int(x + 2 * u), int(y + 40 * u), int(56 * u), NAVY, max(1, t - 1))
+    # muzzle flash
+    cv.disc(int(x + 57 * u), int(y + 14 * u), max(1, int(2 * u)), GOLD)
+
+
+def icon_atom(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cx, cy = int(x + 30 * u), int(y + 20 * u)
+    _rot_ellipse(cv, cx, cy, int(20 * u), int(8 * u), 0, NAVY_SOFT, max(1, t - 1))
+    _rot_ellipse(cv, cx, cy, int(20 * u), int(8 * u), math.pi / 3, NAVY_SOFT, max(1, t - 1))
+    _rot_ellipse(cv, cx, cy, int(20 * u), int(8 * u), -math.pi / 3, NAVY_SOFT, max(1, t - 1))
+    cv.disc(cx, cy, max(2, int(4 * u)), RED)
+
+
+def icon_flag_dk(cv, x, y, u):
+    w, h = int(48 * u), int(34 * u)
+    cv.rect(int(x + 6 * u), int(y + 4 * u), w, h, RED)
+    cv.rect(int(x + 6 * u), int(y + (4 + 14) * u), w, int(6 * u), WHITE)
+    cv.rect(int(x + (6 + 15) * u), int(y + 4 * u), int(6 * u), h, WHITE)
+    cv.outline(int(x + 6 * u), int(y + 4 * u), w, h, NAVY, 1)
+
+
+def icon_capitol(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cx = int(x + 30 * u)
+    cv.arc_top(cx, int(y + 18 * u), int(14 * u), NAVY, t)
+    cv.rect(cx - int(14 * u), int(y + 18 * u), int(28 * u), int(2 * u), NAVY)
+    for dx in (-11, -4, 3, 10):
+        cv.vline(int(x + (30 + dx) * u), int(y + 20 * u), int(14 * u), NAVY, max(1, t - 1))
+    cv.hline(int(x + 12 * u), int(y + 34 * u), int(36 * u), NAVY, t)
+    cv.hline(int(x + 8 * u), int(y + 38 * u), int(44 * u), NAVY, max(1, t - 1))
+    cv.vline(cx, int(y + 2 * u), int(4 * u), NAVY, max(1, t - 1))
+    cv.disc(cx, int(y + 2 * u), max(1, int(2 * u)), GOLD)
+
+
+def icon_ship(cv, x, y, u):
+    t = max(2, int(2 * u))
+    # hull tilted, bow down
+    cv.line(int(x + 6 * u), int(y + 22 * u), int(x + 54 * u), int(y + 30 * u), NAVY, t)
+    cv.line(int(x + 6 * u), int(y + 22 * u), int(x + 10 * u), int(y + 30 * u), NAVY, t)
+    cv.line(int(x + 54 * u), int(y + 30 * u), int(x + 50 * u), int(y + 36 * u), NAVY, t)
+    cv.line(int(x + 10 * u), int(y + 30 * u), int(x + 50 * u), int(y + 36 * u), NAVY, t)
+    cv.rect(int(x + 30 * u), int(y + 16 * u), int(12 * u), int(7 * u), NAVY)
+    # smoke
+    cv.disc(int(x + 34 * u), int(y + 10 * u), max(1, int(3 * u)), GREY)
+    cv.disc(int(x + 40 * u), int(y + 6 * u), max(1, int(2 * u)), GREY)
+    # waves
+    cv.line(int(x), int(y + 38 * u), int(x + 20 * u), int(y + 38 * u), NAVY_SOFT, max(1, t - 1))
+    cv.line(int(x + 26 * u), int(y + 41 * u), int(x + 46 * u), int(y + 41 * u), NAVY_SOFT, max(1, t - 1))
+    cv.line(int(x + 40 * u), int(y + 38 * u), int(x + 60 * u), int(y + 38 * u), NAVY_SOFT, max(1, t - 1))
+
+
+def icon_voyager(cv, x, y, u):
+    t = max(2, int(2 * u))
+    cx, cy = int(x + 30 * u), int(y + 18 * u)
+    cv.disc(int(x + 46 * u), int(y + 4 * u), max(1, int(2 * u)), GOLD)
+    cv.disc(int(x + 10 * u), int(y + 30 * u), max(1, int(2 * u)), WHITE)
+    cv.disc(int(x + 58 * u), int(y + 28 * u), max(1, int(2 * u)), WHITE)
+    cv.ring(cx, cy, int(10 * u), NAVY_SOFT, max(1, t - 1))
+    cv.ring(cx, cy, int(17 * u), NAVY_SOFT, max(1, t - 1))
+    cv.triangle(cx, int(y + 8 * u), int(x + 18 * u), int(y + 28 * u), int(x + 42 * u), int(y + 28 * u), GOLD)
+    cv.disc(cx, int(y + 22 * u), max(2, int(4 * u)), NAVY)
 
 # ---------------------------------------------------------------- layout
 def build():
     cv = Canvas(W, H, PAPER)
 
     # ---- masthead
-    cv.rect(28, 20, 968, 6, RED)
-    draw_text_centered(cv, 512, 40, "THE WORLD IN ONE DAY", 6, NAVY)
-    draw_text_centered(cv, 512, 96, "THURSDAY 19 NOVEMBER 2026", 4, RED)
-    cv.rect(28, 138, 968, 3, NAVY)
+    cv.rect(28, 16, 968, 6, RED)
+    draw_text_centered(cv, 512, 32, "THE WORLD IN ONE DAY", 6, NAVY, bold=True)
+    draw_text_centered(cv, 512, 88, "THURSDAY 19 NOVEMBER 2026", 3, RED, bold=True)
+    cv.rect(28, 126, 968, 3, NAVY)
 
     # ---- lead panel
-    lx, ly, lw, lh = 28, 152, 968, 260
+    lx, ly, lw, lh = 28, 138, 968, 206
     cv.rect(lx, ly, lw, lh, WHITE)
     cv.outline(lx, ly, lw, lh, NAVY, 3)
     cv.rect(lx, ly, 10, lh, RED)
-    draw_text(cv, lx + 28, ly + 18, "LEAD STORY", 2, RED)
-    # headline, two lines, scale 5
-    draw_text(cv, lx + 28, ly + 48, "TRUMP, XI AND PUTIN", 5, NAVY)
-    draw_text(cv, lx + 28, ly + 96, "MEET IN SHENZHEN", 5, NAVY)
-    sub = ("FIRST THREE-WAY SUMMIT OF THE THREE NUCLEAR POWERS - UKRAINE, "
-           "IRAN, NUCLEAR ARMS AND TRADE ON THE TABLE")
-    draw_block(cv, lx + 28, ly + 158, sub, 2, 640, NAVY_SOFT, leading=18)
-    draw_text(cv, lx + 28, ly + 224, "APEC SIDELINES - SHENZHEN, CHINA", 2, GREY)
-    # three flags, right side (thin outline so the white band reads)
+    draw_text(cv, lx + 26, ly + 16, "LEAD STORY", 2, RED, bold=True)
+    draw_text(cv, lx + 26, ly + 44, "TRUMP, XI AND PUTIN", 5, NAVY, bold=True)
+    draw_text(cv, lx + 26, ly + 88, "MEET IN SHENZHEN", 5, NAVY, bold=True)
+    sub = ("FIRST THREE-WAY SUMMIT OF THE NUCLEAR POWERS - JOINT CALL FOR "
+           "NUCLEAR-RISK DIALOGUE AND STEADY ENERGY FLOWS, SILENT ON UKRAINE "
+           "AND IRAN")
+    draw_block(cv, lx + 26, ly + 138, sub, 2, 640, NAVY_SOFT, leading=18)
     fx = lx + 716
-    flag_us(cv, fx, ly + 26, 170, 56)
-    flag_cn(cv, fx, ly + 102, 170, 56)
-    flag_ru(cv, fx, ly + 178, 170, 56)
-    cv.outline(fx, ly + 26, 170, 56, NAVY, 1)
-    cv.outline(fx, ly + 102, 170, 56, NAVY, 1)
-    cv.outline(fx, ly + 178, 170, 56, NAVY, 1)
-    draw_text(cv, fx + 180, ly + 46, "USA", 2, NAVY)
-    draw_text(cv, fx + 180, ly + 122, "CHINA", 2, NAVY)
-    draw_text(cv, fx + 180, ly + 198, "RUSSIA", 2, NAVY)
+    flag_us(cv, fx, ly + 16, 170, 56)
+    flag_cn(cv, fx, ly + 80, 170, 56)
+    flag_ru(cv, fx, ly + 144, 170, 56)
+    cv.outline(fx, ly + 16, 170, 56, NAVY, 1)
+    cv.outline(fx, ly + 80, 170, 56, NAVY, 1)
+    cv.outline(fx, ly + 144, 170, 56, NAVY, 1)
+    draw_text(cv, fx + 178, ly + 36, "USA", 2, NAVY, bold=True)
+    draw_text(cv, fx + 178, ly + 100, "CHINA", 2, NAVY, bold=True)
+    draw_text(cv, fx + 178, ly + 164, "RUSSIA", 2, NAVY, bold=True)
 
-    # ---- grid of six panels
-    panels = [
-        ("MIDDLE EAST", "IRAN STRIKES GULF AFTER US HIT ON QESHM",
-         "TEHRAN FIRES AT US BASES IN KUWAIT AND BAHRAIN, TANKER HIT IN THE STRAIT OF HORMUZ",
+    # ---- tier 1: six big panels, 2 cols x 3 rows, each with a large icon
+    tier1 = [
+        ("THE HAGUE", "ICJ: MYANMAR GUILTY OF ROHINGYA GENOCIDE",
+         "FIRST SUCH RULING - COURT ORDERS INQUIRY, COMPENSATION, REFUGEE RETURNS",
+         icon_scales),
+        ("GULF", "US HITS QESHM, IRAN STRIKES BACK",
+         "TEHRAN FIRES AT US BASES IN KUWAIT AND BAHRAIN - TANKER HIT IN HORMUZ",
          icon_tanker),
-        ("UKRAINE", "UKRAINE HITS CRIMEA BRIDGE",
-         "THIRD STRIKE ON THE BRIDGE THIS WEEK", icon_bridge),
+        ("UKRAINE", "UKRAINE HITS CRIMEA BRIDGE AGAIN",
+         "THIRD STRIKE THIS WEEK - RAIL SECTION DAMAGED, TRAINS HALTED",
+         icon_bridge),
         ("MARKETS", "ANTHROPIC: BIGGEST IPO EVER",
-         "PRICED AT $83 - $81.3BN - TRADING TODAY ON NASDAQ AS ANT", icon_chart),
-        ("CULTURE", "GTA VI ON SALE TODAY",
-         "AFTER A 13-YEAR WAIT, ON PS5 AND XBOX", icon_controller),
-        ("SPACE", "VOYAGER 1: ONE LIGHT-DAY AWAY",
-         "FARTHEST HUMAN-MADE OBJECT, 16BN MILES OUT", icon_voyager),
-        ("WORLD COURT", "UN COURT TO RULE ON MYANMAR",
-         "GENOCIDE CASE OVER THE ROHINGYA", icon_scales),
+         "$83 A SHARE - $81.3BN RAISED - TRADES TODAY ON NASDAQ",
+         icon_chart),
+        ("CLIMATE", "COP31 TALKS ENTER FINAL STRETCH",
+         "TRANSITION AWAY VS PHASEOUT STILL UNSETTLED",
+         icon_globe),
+        ("INDIA", "CYCLONE AKVAN BEARS DOWN ON EAST COAST",
+         "LANDFALL FRIDAY - WINDS 90-100 KM/H, ANDHRA PRADESH-ODISHA",
+         icon_cyclone),
     ]
-    gx, gy = 28, 424
-    pw, ph, gap = 472, 142, 24
-    for i, (kicker, head, sub, icon) in enumerate(panels):
-        px = gx + (i % 2) * (pw + gap)
-        py = gy + (i // 2) * (ph + 8)
+    gx, gy = 28, 356
+    pw, ph, gap = 472, 104, 8
+    for i, (kicker, head, sub, icon) in enumerate(tier1):
+        px = gx + (i % 2) * (pw + 24)
+        py = gy + (i // 2) * (ph + gap)
         cv.rect(px, py, pw, ph, WHITE)
         cv.outline(px, py, pw, ph, NAVY, 2)
         cv.rect(px, py, pw, 4, RED)
-        draw_text(cv, px + 14, py + 14, kicker, 2, RED)
-        icon(cv, px + pw - 76, py + 6)
-        head_h = draw_block(cv, px + 14, py + 40, head, 3, pw - 28, NAVY, leading=23)
-        draw_block(cv, px + 14, py + 40 + head_h + 5, sub, 2, pw - 28, NAVY_SOFT, leading=16)
+        draw_text(cv, px + 14, py + 11, kicker, 1, RED, bold=True)
+        icon(cv, px + pw - 100, py + 14, 1.5)
+        hh = draw_block(cv, px + 14, py + 29, head, 2.5, pw - 28 - 100, NAVY,
+                        leading=21, bold=True)
+        draw_block(cv, px + 14, py + 29 + hh + 3, sub, 1.5, pw - 28 - 100,
+                   NAVY_SOFT, leading=13)
+
+    # ---- tier 2: eight smaller panels, 2 cols x 4 rows, each with an icon
+    tier2 = [
+        ("BANGLADESH", "UNREST: 4 DEAD, YUNUS HOME TORCHED",
+         "ANCESTRAL HOME OF MUHAMMAD YUNUS BURNED", icon_flame),
+        ("SAUDI ARABIA", "HOUTHI MISSILE DAMAGES PIF TOWER",
+         "STRIKE HITS RIYADH LANDMARK", icon_tower),
+        ("GAZA", "ISRAEL PUSHES INTO CENTRAL GAZA",
+         "GROUND OPERATION DESPITE CEASEFIRE", icon_tank),
+        ("NORTH KOREA", "IAEA: YONGBYON ENRICHMENT EXPANDS",
+         "URANIUM FACILITY GROWS, AGENCY SAYS", icon_atom),
+        ("GREENLAND", "DENMARK BACKS US SECURITY DEAL 109-0",
+         "PARLIAMENT APPROVES GREENLAND PACT", icon_flag_dk),
+        ("WASHINGTON", "JEFFRIES NOMINATED HOUSE SPEAKER",
+         "FULL HOUSE VOTE SET FOR 3 JANUARY", icon_capitol),
+        ("BLACK SEA", "LPG TANKER GAS HUSKY SINKS",
+         "HIT BY PROJECTILE OFF BULGARIA", icon_ship),
+        ("SPACE", "VOYAGER 1 NEARS ONE LIGHT-DAY",
+         "FARTHEST HUMAN-MADE OBJECT, 16BN MILES OUT", icon_voyager),
+    ]
+    gy2 = 692
+    pw2, ph2 = 472, 56
+    for i, (kicker, head, sub, icon) in enumerate(tier2):
+        px = gx + (i % 2) * (pw2 + 24)
+        py = gy2 + (i // 2) * (ph2 + gap)
+        cv.rect(px, py, pw2, ph2, WHITE)
+        cv.outline(px, py, pw2, ph2, NAVY, 2)
+        cv.rect(px, py, pw2, 3, RED)
+        draw_text(cv, px + 12, py + 7, kicker, 1, RED, bold=True)
+        icon(cv, px + pw2 - 64, py + 7, 0.85)
+        hh = draw_block(cv, px + 12, py + 22, head, 2, pw2 - 24 - 68, NAVY,
+                        leading=16, bold=True)
+        if hh <= 16:
+            # sub only when it fits on exactly one line inside the panel
+            slines = wrap(sub, 1.5, pw2 - 24 - 68)
+            if len(slines) == 1:
+                draw_text(cv, px + 12, py + 40, slines[0], 1.5, NAVY_SOFT)
 
     # ---- also today strip
-    sx, sy, sw, sh = 28, 876, 968, 70
+    sx, sy, sw, sh = 28, 948, 968, 66
     cv.rect(sx, sy, sw, sh, NAVY)
-    draw_text(cv, sx + 16, sy + 12, "ALSO TODAY", 2, GOLD)
+    draw_text(cv, sx + 16, sy + 8, "ALSO TODAY", 2, GOLD, bold=True)
     also = ("GAZA: AID CALL AS FLOODS HIT SHELTERS \u2022 CALIFORNIA: RECORD RAIN "
-            "\u2022 JEFFRIES SET TO BE FIRST BLACK US HOUSE SPEAKER")
-    draw_block(cv, sx + 16, sy + 36, also, 2, sw - 32, WHITE, leading=17)
-
-    # ---- footer
-    draw_text_centered(cv, 512, 962, "19 NOVEMBER 2026 \u2022 WORLD NEWS IN ONE IMAGE", 2, GREY)
+            "\u2022 BOAT SINKS OFF SENEGAL, DOZENS MISSING \u2022 BITCOIN BELOW "
+            "$63,000, THEN RECOVERS \u2022 TRUMP ASKS COURT TO END VENEZUELA TPS "
+            "\u2022 CARNEY CLOSES APEC")
+    draw_block(cv, sx + 16, sy + 28, also, 1.5, sw - 32, WHITE, leading=13)
     return cv
 
 
